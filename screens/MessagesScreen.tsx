@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/Card';
 import { Avatar } from '@/components/Avatar';
 import { supabase } from '@/lib/supabase';
 import { Match, User } from '@/types';
-import { MessageCircle } from 'lucide-react-native';
+import { MessageCircle, Inbox } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 
 interface MatchWithUser extends Match {
@@ -22,6 +25,7 @@ interface MatchWithUser extends Match {
 export const MessagesScreen = () => {
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [matches, setMatches] = useState<MatchWithUser[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -40,7 +44,7 @@ export const MessagesScreen = () => {
       .from('matches')
       .select('*')
       .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
-      .eq('status', 'accepted')
+      .in('status', ['pending', 'accepted'])
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -77,11 +81,18 @@ export const MessagesScreen = () => {
   const renderMatch = ({ item }: { item: MatchWithUser }) => {
     if (!item.otherUser) return null;
 
+    const isPending = item.status === 'pending';
+    const isProposedByMe = item.proposed_by === user?.id;
+
     return (
-      <TouchableOpacity
-        onPress={() => router.push(`/chat/${item.id}` as any)}
-      >
+      <TouchableOpacity onPress={() => router.push(`/chat/${item.id}` as any)}>
         <Card style={styles.matchCard}>
+          <LinearGradient
+            colors={['rgba(59, 130, 246, 0.05)', 'rgba(139, 92, 246, 0.02)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
           <View style={styles.matchContent}>
             <Avatar
               url={item.otherUser.avatar_url}
@@ -90,7 +101,13 @@ export const MessagesScreen = () => {
             />
             <View style={styles.matchInfo}>
               <Text style={styles.matchName}>{item.otherUser.name}</Text>
-              <Text style={styles.matchStatus}>Kliknij, aby czatować</Text>
+              <Text style={styles.matchStatus}>
+                {isPending
+                  ? isProposedByMe
+                    ? 'Oczekuje na odpowiedź...'
+                    : 'Zaproszenie do lunchu!'
+                  : 'Kliknij, aby czatować'}
+              </Text>
             </View>
             <MessageCircle size={24} color="#3b82f6" />
           </View>
@@ -99,39 +116,55 @@ export const MessagesScreen = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Wiadomości</Text>
-        </View>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-        </View>
+  const renderEmpty = () => (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconContainer}>
+        <LinearGradient
+          colors={['rgba(59, 130, 246, 0.2)', 'rgba(139, 92, 246, 0.1)']}
+          style={styles.emptyIconGradient}
+        >
+          <Inbox size={48} color="#3b82f6" />
+        </LinearGradient>
       </View>
-    );
-  }
+      <Text style={styles.emptyTitle}>Brak wiadomości</Text>
+      <Text style={styles.emptySubtitle}>
+        Zaproponuj lunch komuś w pobliżu, aby rozpocząć rozmowę
+      </Text>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Wiadomości</Text>
-      </View>
+      <LinearGradient
+        colors={['#0f172a', '#1e293b']}
+        style={StyleSheet.absoluteFill}
+      />
 
-      {matches.length === 0 ? (
-        <View style={styles.emptyState}>
-          <MessageCircle size={64} color="#cbd5e1" />
-          <Text style={styles.emptyTitle}>Brak wiadomości</Text>
-          <Text style={styles.emptySubtitle}>
-            Zaproponuj lunch komuś w pobliżu, aby rozpocząć rozmowę
-          </Text>
+      {/* Header z bezpiecznym obszarem */}
+      <BlurView
+        intensity={80}
+        tint="dark"
+        style={[styles.header, { paddingTop: insets.top + 16 }]}
+      >
+        <Text style={styles.title}>💬 Wiadomości</Text>
+      </BlurView>
+
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Ładowanie wiadomości...</Text>
         </View>
       ) : (
         <FlatList
           data={matches}
           renderItem={renderMatch}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: insets.bottom + 80 },
+          ]}
+          ListEmptyComponent={renderEmpty}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
@@ -141,61 +174,74 @@ export const MessagesScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#0f172a',
   },
   header: {
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#fff',
   },
   list: {
     padding: 16,
   },
   matchCard: {
     marginBottom: 12,
+    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
   },
   matchContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
+    gap: 12,
   },
   matchInfo: {
     flex: 1,
-    marginLeft: 12,
   },
   matchName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#fff',
     marginBottom: 4,
   },
   matchStatus: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#94a3b8',
   },
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyIconContainer: {
+    marginBottom: 24,
+  },
+  emptyIconGradient: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginTop: 16,
+    fontWeight: '700',
+    color: '#fff',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#94a3b8',
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -203,5 +249,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#94a3b8',
   },
 });

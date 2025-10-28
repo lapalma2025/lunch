@@ -10,6 +10,7 @@ export interface User {
   avatar_url: string | null;
   created_at: string;
   updated_at: string;
+  age?: number;
 }
 
 export interface Match {
@@ -45,7 +46,9 @@ export interface Restaurant {
   distance?: number;
   lat: number;
   lon: number;
-  photo_reference?: string;
+  photo_reference?: string | null;
+  user_ratings_total?: number;
+  opening_hours?: any;
 }
 
 export interface Feedback {
@@ -56,4 +59,5 @@ export interface Feedback {
 
 export interface NearbyUser extends User {
   distance: number;
+  age?: number;
 }

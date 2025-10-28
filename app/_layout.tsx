@@ -2,12 +2,9 @@ import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { useNotifications } from '@/hooks/useNotifications';
 import { AuthProvider } from '@/contexts/AuthContext';
 
 function RootLayoutContent() {
-  useNotifications();
-
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,51 +9,127 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Slider from '@react-native-community/slider';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/Card';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
-import { supabase } from '@/lib/supabase';
-import { calculateDistance, getCurrentLocation } from '@/lib/location';
+import { getCurrentLocation } from '@/lib/location';
 import { NearbyUser } from '@/types';
-import { MapPin, Clock } from 'lucide-react-native';
-import { sendLocalNotification } from '@/lib/notifications';
+import { MapPin, Clock, Sliders, Users } from 'lucide-react-native';
+
+// Mocki - zastąp rzeczywistym API później
+const MOCK_USERS: NearbyUser[] = [
+  {
+    id: 'mock1',
+    name: 'Anna Kowalska',
+    bio: 'UX Designer, miłośniczka dobrego jedzenia 🍕',
+    interests: ['Design', 'Startup', 'Food'],
+    lat: 51.1079,
+    lon: 17.0385,
+    is_available: true,
+    available_until: null,
+    avatar_url: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    distance: 1.2,
+    age: 28,
+  },
+  {
+    id: 'mock2',
+    name: 'Jan Nowak',
+    bio: 'Developer & foodie. Zawsze chętny na lunch!',
+    interests: ['Tech', 'AI', 'Coffee'],
+    lat: 51.1079,
+    lon: 17.0385,
+    is_available: true,
+    available_until: null,
+    avatar_url: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    distance: 2.5,
+    age: 32,
+  },
+  {
+    id: 'mock3',
+    name: 'Maria Wiśniewska',
+    bio: 'Product Manager, lubię poznawać nowych ludzi',
+    interests: ['Product', 'Networking', 'Travel'],
+    lat: 51.1079,
+    lon: 17.0385,
+    is_available: true,
+    available_until: null,
+    avatar_url: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    distance: 3.8,
+    age: 26,
+  },
+  {
+    id: 'mock4',
+    name: 'Piotr Zieliński',
+    bio: 'Marketing specialist, kawosz i food blogger',
+    interests: ['Marketing', 'Food', 'Photography'],
+    lat: 51.1079,
+    lon: 17.0385,
+    is_available: true,
+    available_until: null,
+    avatar_url: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    distance: 4.5,
+    age: 35,
+  },
+  {
+    id: 'mock5',
+    name: 'Katarzyna Lewandowska',
+    bio: 'HR Manager, social butterfly 🦋',
+    interests: ['People', 'Culture', 'Food'],
+    lat: 51.1079,
+    lon: 17.0385,
+    is_available: true,
+    available_until: null,
+    avatar_url: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    distance: 2.1,
+    age: 29,
+  },
+];
 
 export const HomeScreen = () => {
   const { user, updateProfile } = useAuth();
+  const insets = useSafeAreaInsets();
   const [nearbyUsers, setNearbyUsers] = useState<NearbyUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Filtry
+  const [maxDistance, setMaxDistance] = useState(5);
+  const [minAge, setMinAge] = useState(18);
+  const [maxAge, setMaxAge] = useState(65);
+  const [showFilters, setShowFilters] = useState(false);
+
   const fetchNearbyUsers = async () => {
-    if (!user?.lat || !user?.lon) {
-      Alert.alert('Błąd', 'Brak danych lokalizacji');
+    if (!user?.is_available) {
+      setNearbyUsers([]);
       return;
     }
 
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('is_available', true)
-      .neq('id', user.id);
+    // Symuluj opóźnienie
+    await new Promise((resolve) => setTimeout(resolve, 800));
 
-    if (error) {
-      console.error('Error fetching users:', error);
-    } else if (data) {
-      const usersWithDistance = data
-        .filter((u) => u.lat && u.lon)
-        .map((u) => ({
-          ...u,
-          distance: calculateDistance(user.lat!, user.lon!, u.lat, u.lon),
-        }))
-        .filter((u) => u.distance <= 2)
-        .sort((a, b) => a.distance - b.distance);
+    // Filtruj mocki
+    const filtered = MOCK_USERS.filter(
+      (u) => u.distance <= maxDistance && u.age >= minAge && u.age <= maxAge
+    );
 
-      setNearbyUsers(usersWithDistance);
-    }
-
+    setNearbyUsers(filtered);
     setLoading(false);
   };
 
@@ -86,43 +162,33 @@ export const HomeScreen = () => {
   };
 
   const proposeLunch = async (otherUser: NearbyUser) => {
-    if (!user) return;
-
-    const userA = user.id < otherUser.id ? user.id : otherUser.id;
-    const userB = user.id < otherUser.id ? otherUser.id : user.id;
-
-    const { error } = await supabase.from('matches').insert({
-      user_a: userA,
-      user_b: userB,
-      proposed_by: user.id,
-      status: 'pending',
-    });
-
-    if (error) {
-      Alert.alert('Błąd', error.message);
-    } else {
-      Alert.alert('Sukces', `Propozycja wysłana do ${otherUser.name}!`);
-      await sendLocalNotification(
-        'Propozycja wysłana',
-        `Czekamy na odpowiedź od ${otherUser.name}`
-      );
-    }
+    Alert.alert(
+      'Propozycja wysłana!',
+      `${otherUser.name} otrzyma powiadomienie o Twojej propozycji lunchu.`,
+      [{ text: 'OK' }]
+    );
   };
 
   useEffect(() => {
-    if (user?.is_available) {
-      fetchNearbyUsers();
-    }
-  }, [user?.is_available]);
+    fetchNearbyUsers();
+  }, [user?.is_available, maxDistance, minAge, maxAge]);
 
   const renderUser = ({ item }: { item: NearbyUser }) => (
     <Card style={styles.userCard}>
+      <LinearGradient
+        colors={['rgba(59, 130, 246, 0.05)', 'rgba(139, 92, 246, 0.02)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+
       <View style={styles.userHeader}>
         <Avatar url={item.avatar_url} name={item.name} size={60} />
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{item.name}</Text>
+          {item.age && <Text style={styles.userAge}>{item.age} lat</Text>}
           <View style={styles.distance}>
-            <MapPin size={14} color="#64748b" />
+            <MapPin size={14} color="#94a3b8" />
             <Text style={styles.distanceText}>{item.distance} km</Text>
           </View>
         </View>
@@ -130,7 +196,7 @@ export const HomeScreen = () => {
 
       {item.bio && <Text style={styles.bio}>{item.bio}</Text>}
 
-      {item.interests.length > 0 && (
+      {item.interests && item.interests.length > 0 && (
         <View style={styles.interests}>
           {item.interests.map((interest, index) => (
             <View key={index} style={styles.tag}>
@@ -143,7 +209,6 @@ export const HomeScreen = () => {
       <Button
         title="Zaproponuj lunch 🍽️"
         onPress={() => proposeLunch(item)}
-        variant="secondary"
         style={styles.proposeButton}
       />
     </Card>
@@ -151,32 +216,134 @@ export const HomeScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Osoby w pobliżu</Text>
-        <TouchableOpacity
-          style={[
-            styles.availabilityBadge,
-            user?.is_available && styles.availableBadge,
-          ]}
-          onPress={toggleAvailability}
-        >
-          <Clock
-            size={16}
-            color={user?.is_available ? '#10b981' : '#64748b'}
-          />
-          <Text
-            style={[
-              styles.availabilityText,
-              user?.is_available && styles.availableText,
-            ]}
-          >
-            {user?.is_available ? 'Dostępny' : 'Niedostępny'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <LinearGradient
+        colors={['#0f172a', '#1e293b']}
+        style={StyleSheet.absoluteFill}
+      />
 
+      {/* Header */}
+      <BlurView
+        intensity={80}
+        tint="dark"
+        style={[styles.header, { paddingTop: insets.top + 16 }]}
+      >
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>👥 Osoby w pobliżu</Text>
+          <TouchableOpacity
+            style={[
+              styles.availabilityBadge,
+              user?.is_available && styles.availableBadge,
+            ]}
+            onPress={toggleAvailability}
+          >
+            <Clock
+              size={16}
+              color={user?.is_available ? '#10b981' : '#94a3b8'}
+            />
+            <Text
+              style={[
+                styles.availabilityText,
+                user?.is_available && styles.availableText,
+              ]}
+            >
+              {user?.is_available ? 'Dostępny' : 'Niedostępny'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Toggle Filters */}
+        {user?.is_available && (
+          <TouchableOpacity
+            style={styles.filterToggle}
+            onPress={() => setShowFilters(!showFilters)}
+          >
+            <Sliders size={18} color="#60a5fa" />
+            <Text style={styles.filterToggleText}>Filtry</Text>
+          </TouchableOpacity>
+        )}
+      </BlurView>
+
+      {/* Filtry */}
+      {user?.is_available && showFilters && (
+        <BlurView intensity={40} tint="dark" style={styles.filtersCard}>
+          {/* Odległość */}
+          <View style={styles.filterSection}>
+            <View style={styles.filterHeader}>
+              <MapPin size={20} color="#3b82f6" />
+              <Text style={styles.filterTitle}>Odległość</Text>
+            </View>
+            <Text style={styles.filterValue}>{maxDistance} km</Text>
+            <Slider
+              style={styles.slider}
+              minimumValue={1}
+              maximumValue={10}
+              step={1}
+              value={maxDistance}
+              onValueChange={setMaxDistance}
+              minimumTrackTintColor="#3b82f6"
+              maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
+              thumbTintColor="#3b82f6"
+            />
+            <View style={styles.sliderLabels}>
+              <Text style={styles.sliderLabel}>1 km</Text>
+              <Text style={styles.sliderLabel}>10 km</Text>
+            </View>
+          </View>
+
+          {/* Wiek */}
+          <View style={styles.filterSection}>
+            <View style={styles.filterHeader}>
+              <Users size={20} color="#8b5cf6" />
+              <Text style={styles.filterTitle}>Wiek</Text>
+            </View>
+            <Text style={styles.filterValue}>
+              {minAge} - {maxAge} lat
+            </Text>
+            <View style={styles.ageSliders}>
+              <View style={styles.ageSlider}>
+                <Text style={styles.ageLabel}>Min: {minAge}</Text>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={18}
+                  maximumValue={maxAge - 1}
+                  step={1}
+                  value={minAge}
+                  onValueChange={setMinAge}
+                  minimumTrackTintColor="#8b5cf6"
+                  maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
+                  thumbTintColor="#8b5cf6"
+                />
+              </View>
+              <View style={styles.ageSlider}>
+                <Text style={styles.ageLabel}>Max: {maxAge}</Text>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={minAge + 1}
+                  maximumValue={80}
+                  step={1}
+                  value={maxAge}
+                  onValueChange={setMaxAge}
+                  minimumTrackTintColor="#8b5cf6"
+                  maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
+                  thumbTintColor="#8b5cf6"
+                />
+              </View>
+            </View>
+          </View>
+        </BlurView>
+      )}
+
+      {/* Content */}
       {!user?.is_available ? (
         <View style={styles.emptyState}>
+          <View style={styles.emptyIconContainer}>
+            <LinearGradient
+              colors={['rgba(239, 68, 68, 0.2)', 'rgba(239, 68, 68, 0.1)']}
+              style={styles.emptyIconGradient}
+            >
+              <Clock size={48} color="#ef4444" />
+            </LinearGradient>
+          </View>
           <Text style={styles.emptyTitle}>Nie jesteś dostępny</Text>
           <Text style={styles.emptySubtitle}>
             Włącz dostępność, aby zobaczyć osoby w pobliżu
@@ -190,12 +357,21 @@ export const HomeScreen = () => {
       ) : loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#3b82f6" />
+          <Text style={styles.loadingText}>Szukam ludzi w okolicy...</Text>
         </View>
       ) : nearbyUsers.length === 0 ? (
         <View style={styles.emptyState}>
+          <View style={styles.emptyIconContainer}>
+            <LinearGradient
+              colors={['rgba(59, 130, 246, 0.2)', 'rgba(139, 92, 246, 0.1)']}
+              style={styles.emptyIconGradient}
+            >
+              <Users size={48} color="#3b82f6" />
+            </LinearGradient>
+          </View>
           <Text style={styles.emptyTitle}>Brak osób w pobliżu</Text>
           <Text style={styles.emptySubtitle}>
-            W promieniu 2 km nie ma nikogo dostępnego na lunch
+            Spróbuj zwiększyć zasięg lub zmienić filtry
           </Text>
         </View>
       ) : (
@@ -203,9 +379,16 @@ export const HomeScreen = () => {
           data={nearbyUsers}
           renderItem={renderUser}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[
+            styles.list,
+            { paddingBottom: insets.bottom + 80 },
+          ]}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#3b82f6"
+            />
           }
         />
       )}
@@ -216,48 +399,115 @@ export const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#0f172a',
   },
   header: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    marginBottom: 12,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#fff',
   },
   availabilityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
-    gap: 6,
+    backgroundColor: 'rgba(148, 163, 184, 0.2)',
   },
   availableBadge: {
-    backgroundColor: '#d1fae5',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
   },
   availabilityText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#94a3b8',
   },
   availableText: {
     color: '#10b981',
+  },
+  filterToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  filterToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#60a5fa',
+  },
+  filtersCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    gap: 24,
+  },
+  filterSection: {
+    gap: 12,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  filterValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#3b82f6',
+    textAlign: 'center',
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  sliderLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  ageSliders: {
+    gap: 16,
+  },
+  ageSlider: {
+    gap: 8,
+  },
+  ageLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#a78bfa',
   },
   list: {
     padding: 16,
   },
   userCard: {
     marginBottom: 16,
+    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   userHeader: {
     flexDirection: 'row',
@@ -271,7 +521,12 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1e293b',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  userAge: {
+    fontSize: 13,
+    color: '#94a3b8',
     marginBottom: 4,
   },
   distance: {
@@ -280,12 +535,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   distanceText: {
-    fontSize: 14,
-    color: '#64748b',
+    fontSize: 13,
+    color: '#94a3b8',
   },
   bio: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#cbd5e1',
     marginBottom: 12,
     lineHeight: 20,
   },
@@ -298,12 +553,12 @@ const styles = StyleSheet.create({
   tag: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#dbeafe',
-    borderRadius: 16,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderRadius: 12,
   },
   tagText: {
     fontSize: 12,
-    color: '#3b82f6',
+    color: '#60a5fa',
     fontWeight: '500',
   },
   proposeButton: {
@@ -313,28 +568,44 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyIconContainer: {
+    marginBottom: 24,
+  },
+  emptyIconGradient: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontWeight: '700',
+    color: '#fff',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#94a3b8',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 24,
   },
   enableButton: {
-    marginTop: 24,
     minWidth: 200,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#94a3b8',
   },
 });
