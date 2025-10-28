@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
-import { Home, MapPin, MessageCircle, User } from 'lucide-react-native';
+import { Home, MapPin, MessageCircle, User, Bell } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,8 +17,8 @@ export default function TabLayout() {
           backgroundColor: '#1e293b',
           borderTopWidth: 1,
           borderTopColor: 'rgba(255, 255, 255, 0.1)',
-          height: 60 + insets.bottom, // Dynamiczna wysokość bazując na safe area
-          paddingBottom: insets.bottom, // Padding dla dolnego obszaru
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom,
           paddingTop: 8,
           position: 'absolute',
           bottom: 0,
@@ -58,6 +58,13 @@ export default function TabLayout() {
         options={{
           title: 'Mapa',
           tabBarIcon: ({ size, color }) => <MapPin size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="proposals"
+        options={{
+          title: 'Zaproszenia',
+          tabBarIcon: ({ size, color }) => <Bell size={size} color={color} />,
         }}
       />
       <Tabs.Screen

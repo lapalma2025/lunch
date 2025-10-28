@@ -17,7 +17,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/Card';
 import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
+import { LunchProposalModal } from '@/components/LunchProposalModal';
 import { getCurrentLocation } from '@/lib/location';
+import { supabase } from '@/lib/supabase';
 import { NearbyUser } from '@/types';
 import { MapPin, Clock, Sliders, Users } from 'lucide-react-native';
 
@@ -113,6 +115,10 @@ export const HomeScreen = () => {
   const [maxAge, setMaxAge] = useState(65);
   const [showFilters, setShowFilters] = useState(false);
 
+  // Modal zaproszenia
+  const [showProposalModal, setShowProposalModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
+
   const fetchNearbyUsers = async () => {
     if (!user?.is_available) {
       setNearbyUsers([]);
@@ -161,12 +167,48 @@ export const HomeScreen = () => {
     }
   };
 
-  const proposeLunch = async (otherUser: NearbyUser) => {
-    Alert.alert(
-      'Propozycja wysłana!',
-      `${otherUser.name} otrzyma powiadomienie o Twojej propozycji lunchu.`,
-      [{ text: 'OK' }]
-    );
+  const proposeLunch = (otherUser: NearbyUser) => {
+    setSelectedUser(otherUser);
+    setShowProposalModal(true);
+  };
+
+  const handleSendProposal = async (
+    restaurantId: string,
+    time: 'now' | Date
+  ) => {
+    if (!user || !selectedUser) return;
+
+    try {
+      const userA = user.id < selectedUser.id ? user.id : selectedUser.id;
+      const userB = user.id < selectedUser.id ? selectedUser.id : user.id;
+
+      const meetingTime =
+        time === 'now' ? new Date().toISOString() : time.toISOString();
+
+      const { error } = await supabase.from('matches').insert({
+        user_a: userA,
+        user_b: userB,
+        proposed_by: user.id,
+        status: 'pending',
+        proposed_restaurant_id: restaurantId,
+        proposed_time: meetingTime,
+      });
+
+      if (error) {
+        Alert.alert('Błąd', error.message);
+      } else {
+        Alert.alert(
+          'Sukces! 🎉',
+          `Propozycja lunchu została wysłana do ${selectedUser.name}. Osoba otrzyma powiadomienie.`,
+          [{ text: 'OK' }]
+        );
+        setShowProposalModal(false);
+        setSelectedUser(null);
+      }
+    } catch (error) {
+      console.error('Error sending proposal:', error);
+      Alert.alert('Błąd', 'Nie udało się wysłać propozycji');
+    }
   };
 
   useEffect(() => {
@@ -392,6 +434,17 @@ export const HomeScreen = () => {
           }
         />
       )}
+
+      {/* Modal zaproszenia */}
+      <LunchProposalModal
+        visible={showProposalModal}
+        onClose={() => {
+          setShowProposalModal(false);
+          setSelectedUser(null);
+        }}
+        targetUser={selectedUser}
+        onSend={handleSendProposal}
+      />
     </View>
   );
 };
