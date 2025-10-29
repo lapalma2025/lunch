@@ -6,8 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Platform,
-  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +14,14 @@ import { Avatar } from '@/components/Avatar';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { TimePicker } from '@/components/TimePicker';
-import { LogOut, Edit2, Camera, Clock } from 'lucide-react-native';
+import {
+  LogOut,
+  Edit2,
+  Camera,
+  Clock,
+  User,
+  Calendar,
+} from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 
@@ -26,6 +31,8 @@ export const ProfileScreen = () => {
   const [name, setName] = useState(user?.name || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [interests, setInterests] = useState(user?.interests.join(', ') || '');
+  const [age, setAge] = useState(user?.age?.toString() || '');
+  const [gender, setGender] = useState(user?.gender || '');
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -109,6 +116,13 @@ export const ProfileScreen = () => {
       return;
     }
 
+    // Walidacja wieku
+    const ageNum = parseInt(age);
+    if (age && (isNaN(ageNum) || ageNum < 18 || ageNum > 99)) {
+      Alert.alert('Błąd', 'Wiek musi być liczbą między 18 a 99');
+      return;
+    }
+
     setLoading(true);
 
     const interestsArray = interests
@@ -120,6 +134,8 @@ export const ProfileScreen = () => {
       name: name.trim(),
       bio: bio.trim(),
       interests: interestsArray,
+      age: age ? ageNum : null,
+      gender: gender || null,
       available_from: availableFrom.toISOString(),
       available_to: availableTo.toISOString(),
     });
@@ -188,6 +204,29 @@ export const ProfileScreen = () => {
             {!editing ? (
               <>
                 <Text style={styles.name}>{user.name}</Text>
+
+                {/* Wiek i płeć */}
+                <View style={styles.metaInfo}>
+                  {user.age && (
+                    <View style={styles.metaBadge}>
+                      <Calendar size={14} color="#60a5fa" />
+                      <Text style={styles.metaText}>{user.age} lat</Text>
+                    </View>
+                  )}
+                  {user.gender && (
+                    <View style={styles.metaBadge}>
+                      <User size={14} color="#60a5fa" />
+                      <Text style={styles.metaText}>
+                        {user.gender === 'male'
+                          ? 'Mężczyzna'
+                          : user.gender === 'female'
+                          ? 'Kobieta'
+                          : 'Inne'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
                 {user.bio && <Text style={styles.bio}>{user.bio}</Text>}
 
                 {user.interests.length > 0 && (
@@ -206,6 +245,8 @@ export const ProfileScreen = () => {
                     setName(user.name);
                     setBio(user.bio);
                     setInterests(user.interests.join(', '));
+                    setAge(user.age?.toString() || '');
+                    setGender(user.gender || '');
                     setEditing(true);
                   }}
                   variant="outline"
@@ -221,6 +262,76 @@ export const ProfileScreen = () => {
                   containerStyle={styles.input}
                   placeholderTextColor="#64748b"
                 />
+
+                {/* Wiek i płeć w jednym rzędzie */}
+                <View style={styles.rowInputs}>
+                  <View style={styles.halfInput}>
+                    <Input
+                      label="Wiek"
+                      value={age}
+                      onChangeText={setAge}
+                      keyboardType="number-pad"
+                      placeholder="18-99"
+                      placeholderTextColor="#64748b"
+                    />
+                  </View>
+
+                  <View style={styles.halfInput}>
+                    <Text style={styles.inputLabel}>Płeć</Text>
+                    <View style={styles.genderButtons}>
+                      <TouchableOpacity
+                        style={[
+                          styles.genderButton,
+                          gender === 'male' && styles.genderButtonActive,
+                        ]}
+                        onPress={() => setGender('male')}
+                      >
+                        <Text
+                          style={[
+                            styles.genderText,
+                            gender === 'male' && styles.genderTextActive,
+                          ]}
+                        >
+                          M
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.genderButton,
+                          gender === 'female' && styles.genderButtonActive,
+                        ]}
+                        onPress={() => setGender('female')}
+                      >
+                        <Text
+                          style={[
+                            styles.genderText,
+                            gender === 'female' && styles.genderTextActive,
+                          ]}
+                        >
+                          K
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.genderButton,
+                          gender === 'other' && styles.genderButtonActive,
+                        ]}
+                        onPress={() => setGender('other')}
+                      >
+                        <Text
+                          style={[
+                            styles.genderText,
+                            gender === 'other' && styles.genderTextActive,
+                          ]}
+                        >
+                          •
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
 
                 <Input
                   label="O mnie"
@@ -433,6 +544,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 8,
   },
+  metaInfo: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  metaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  metaText: {
+    fontSize: 12,
+    color: '#60a5fa',
+    fontWeight: '500',
+  },
   bio: {
     fontSize: 14,
     color: '#94a3b8',
@@ -465,10 +597,52 @@ const styles = StyleSheet.create({
   },
   input: {
     width: '100%',
+    marginBottom: 12,
   },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+  },
+  rowInputs: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginBottom: 12,
+  },
+  halfInput: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  genderButtons: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderButtonActive: {
+    backgroundColor: 'rgba(59, 130, 246, 0.3)',
+    borderColor: '#3b82f6',
+  },
+  genderText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  genderTextActive: {
+    color: '#60a5fa',
   },
   editActions: {
     flexDirection: 'row',
